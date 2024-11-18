@@ -79,6 +79,13 @@
             color: #4CAF50;
             min-height: 40px;
             padding: 10px;
+            text-align: center;
+        }
+
+        #progress {
+            margin-top: 10px;
+            font-size: 16px;
+            color: #fff;
         }
 
         .button-disabled {
@@ -106,6 +113,7 @@
         <div id="canvas-container">
             <canvas id="canvas"></canvas>
         </div>
+        <div id="progress"></div>
         <div>
             <button id="newGame">Nova Raspadinha</button>
         </div>
@@ -117,11 +125,15 @@
         const ctx = canvas.getContext('2d');
         const newGameBtn = document.getElementById('newGame');
         const resultDiv = document.getElementById('result');
+        const progressDiv = document.getElementById('progress');
         const canvasContainer = document.getElementById('canvas-container');
         let isDrawing = false;
         let isAnimating = false;
         let lastX = 0;
         let lastY = 0;
+        let currentPrize = null;
+        let totalPixels = 0;
+        let revealedPixels = 0;
 
         function resizeCanvas() {
             const container = canvas.parentElement;
@@ -131,9 +143,9 @@
 
         window.addEventListener('resize', () => {
             resizeCanvas();
-            initGame(false); // false indica que não deve iniciar a animação
+            initGame(false);
         });
-        
+
         const prizes = [
             { name: 'MP9 | Food Chain', probability: 20 },
             { name: 'MAC-10 | Ensnared', probability: 15 },
@@ -161,90 +173,86 @@
         }
 
         function initGame(animate = true) {
-            if (isAnimating) return;
-            
-            // Limpa o resultado anterior
-            resultDiv.textContent = '';
-            
-            if (animate) {
-                isAnimating = true;
-                newGameBtn.classList.add('button-disabled');
-            }
-            
-            // Limpa o canvas
-            ctx.fillStyle = '#c0c0c0';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Adiciona textura
-            for (let i = 0; i < canvas.width * canvas.height / 90; i++) {
-                ctx.fillStyle = `rgba(180, 180, 180, ${Math.random() * 0.4})`;
-                ctx.fillRect(
-                    Math.random() * canvas.width,
-                    Math.random() * canvas.height,
-                    2,
-                    2
-                );
-            }
-            
-            if (animate) {
-                // Inicia animação
-                let positions = [];
-                const numPositions = Math.floor((canvas.width * canvas.height) / 2000);
-                
-                for (let i = 0; i < numPositions; i++) {
-                    positions.push({
-                        x: Math.random() * canvas.width,
-                        y: Math.random() * canvas.height
-                    });
-                }
-                
-                let frame = 0;
-                function animate() {
-                    if (frame >= positions.length) {
-                        isAnimating = false;
-                        newGameBtn.classList.remove('button-disabled');
-                        const prize = getRandomPrize();
-                        resultDiv.textContent = `Parabéns! Você ganhou: ${prize}`;
-                        return;
-                    }
-                    
-                    ctx.globalCompositeOperation = 'destination-out';
-                    for (let i = 0; i < 3; i++) {
-                        if (frame + i < positions.length) {
-                            const pos = positions[frame + i];
-                            ctx.beginPath();
-                            ctx.arc(pos.x, pos.y, canvas.width / 20, 0, Math.PI * 2);
-                            ctx.fill();
-                        }
-                    }
-                    
-                    frame += 3;
-                    requestAnimationFrame(animate);
-                }
-                
-                animate();
-            }
+        if (isAnimating) return;
+        
+        // Reset all game states
+        isDrawing = false;
+        resultDiv.textContent = '';
+        progressDiv.textContent = 'Raspe para revelar o prêmio!';
+        currentPrize = getRandomPrize();
+        revealedPixels = 0;
+        totalPixels = canvas.width * canvas.height;
+        
+        // Clear the canvas completely
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Repaint background
+        ctx.fillStyle = '#c0c0c0';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Add texture
+        for (let i = 0; i < canvas.width * canvas.height / 90; i++) {
+            ctx.fillStyle = `rgba(180, 180, 180, ${Math.random() * 0.4})`;
+            ctx.fillRect(
+                Math.random() * canvas.width,
+                Math.random() * canvas.height,
+                2,
+                2
+            );
         }
+        
+        if (animate) {
+            isAnimating = true;
+            newGameBtn.classList.add('button-disabled');
+            
+            let positions = [];
+            const numPositions = Math.floor((canvas.width * canvas.height) / 2000);
+            
+            for (let i = 0; i < numPositions; i++) {
+                positions.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height
+                });
+            }
+            
+            let frame = 0;
+            function animate() {
+                if (frame >= positions.length) {
+                    isAnimating = false;
+                    newGameBtn.classList.remove('button-disabled');
+                    return;
+                }
+                
+                ctx.globalCompositeOperation = 'destination-out';
+                for (let i = 0; i < 3; i++) {
+                    if (frame + i < positions.length) {
+                        const pos = positions[frame + i];
+                        ctx.beginPath();
+                        ctx.arc(pos.x, pos.y, canvas.width / 20, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+                
+                frame += 3;
+                requestAnimationFrame(animate);
+            }
+            
+            animate();
+        }
+    }
 
         function calculateRevealedPercentage() {
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const pixels = imageData.data;
-            let transparentPixels = 0;
-            
-            for (let i = 3; i < pixels.length; i += 4) {
-                if (pixels[i] < 100) transparentPixels++;
-            }
-            
-            return (transparentPixels / (canvas.width * canvas.height)) * 100;
+            return (revealedPixels / totalPixels) * 100;
         }
 
         function reveal() {
             if (isAnimating) return;
             
-            const revealed = calculateRevealedPercentage();
-            if (revealed > 50 && !resultDiv.textContent) {
-                const prize = getRandomPrize();
-                resultDiv.textContent = `Parabéns! Você ganhou: ${prize}`;
+            const revealedPercentage = calculateRevealedPercentage();
+            progressDiv.textContent = `Área revelada: ${revealedPercentage.toFixed(1)}%`;
+            
+            if (revealedPercentage >= 80 && !resultDiv.textContent) {
+                resultDiv.textContent = `Parabéns! Você ganhou: ${currentPrize}`;
             }
         }
 
@@ -269,12 +277,25 @@
             ctx.beginPath();
             ctx.moveTo(lastX, lastY);
             ctx.lineTo(x, y);
-            ctx.lineWidth = canvas.width / 20;
+            ctx.lineWidth = canvas.width / 15;
             ctx.lineCap = 'round';
             ctx.stroke();
             
+            // Update revealed pixels
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pixels = imageData.data;
+            let newRevealedPixels = 0;
+            
+            for (let i = 3; i < pixels.length; i += 4) {
+                if (pixels[i] < 100) newRevealedPixels++;
+            }
+            
+            revealedPixels = newRevealedPixels;
+            
             lastX = x;
             lastY = y;
+            
+            reveal();
         }
 
         function handleEnd() {
@@ -294,8 +315,8 @@
         canvas.addEventListener('touchend', handleEnd);
 
         newGameBtn.addEventListener('click', () => initGame(true));
-        
-        // Inicialização
+
+        // Initialization
         resizeCanvas();
         initGame(true);
     </script>
